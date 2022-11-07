@@ -1,0 +1,13 @@
+name = "NICE"
+uuid = "170674ed-ea2e-4c97-a263-9f057371600a"
+authors = ["QC-Devs"]
+version = "0.1.0"
+
+[compat]
+julia = "1.6"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
