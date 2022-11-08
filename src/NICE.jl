@@ -7,8 +7,8 @@ export ReactionSystem, run_kmc, run_nekmc
 mutable struct ReactionSystem
 
     # Constants
-    n_reaction::Int
     n_species::Int
+    n_reaction::Int
     stoich::Matrix{Float64}
     rev_rate_consts::Vector{Float64}
     fwd_rate_consts::Vector{Float64}
@@ -24,21 +24,21 @@ end
 
 
 function ReactionSystem(stoich, concs, rev_rate_consts, fwd_rate_consts)
-    n_reaction = size(stoich, 1)
-    n_species = size(stoich, 2)
+    n_species = size(stoich, 1)
+    n_reaction = size(stoich, 2)
     n_iter = 0
     time = 0.
     rev_rates = zeros(Float64, n_reaction)
     fwd_rates = zeros(Float64, n_reaction)
     net_rates = zeros(Float64, n_reaction)
-    return ReactionSystem(n_reaction, n_species, stoich, rev_rate_consts, fwd_rate_consts,
+    return ReactionSystem(n_species, n_reaction, stoich, rev_rate_consts, fwd_rate_consts,
         n_iter, time, concs, rev_rates, fwd_rates, net_rates)
 end
 
 
-function ReactionSystem(stoich, concs, keq_vals, φ::Real=1.0)
-    n_reaction = size(stoich, 1)
-    n_species = size(stoich, 2)
+function ReactionSystem(stoich, concs, keq_vals; φ::Real=1.0)
+    n_species = size(stoich, 1)
+    n_reaction = size(stoich, 2)
     rev_rate_consts = φ ./ (keq_vals .+ 1)
     fwd_rate_consts = φ .- rev_rate_consts
     n_iter = 0
@@ -46,13 +46,13 @@ function ReactionSystem(stoich, concs, keq_vals, φ::Real=1.0)
     rev_rates = zeros(Float64, n_reaction)
     fwd_rates = zeros(Float64, n_reaction)
     net_rates = zeros(Float64, n_reaction)
-    return ReactionSystem(n_reaction, n_species, stoich, rev_rate_consts, fwd_rate_consts,
+    return ReactionSystem(n_species, n_reaction, stoich, rev_rate_consts, fwd_rate_consts,
         n_iter, time, concs, rev_rates, fwd_rates, net_rates)
 end
 
 
-function run_kmc(rxn_system, n_iter, ε=1.0e-4)
-    pvec = zeros(2 * rxn_system.n_reaction)
+function run_kmc(rxn_system, n_iter; ε=1.0e-4)
+    pvec = zeros(Float64, 2 * rxn_system.n_reaction)
     for i in 1 : n_iter
         update_rates(rxn_system)
         i_rxn = kmc_select_reaction(rxn_system, pvec)
@@ -62,12 +62,12 @@ function run_kmc(rxn_system, n_iter, ε=1.0e-4)
 end
 
 
-function run_nekmc(rxn_system, n_iter, ε=1.0e-4)
-    pvec = zeros(rxn_system.n_reaction)
+function run_nekmc(rxn_system, n_iter; ε=1.0e-4)
+    pvec = zeros(Float64, rxn_system.n_reaction)
     for i in 1 : n_iter
         update_rates(rxn_system)
-        i_rxn = nemkc_select_reaction(rxn_system, pvec)
-        rxn_system.time += nemkc_do_reaction(rxn_system, i_rxn, ε)
+        i_rxn = nekmc_select_reaction(rxn_system, pvec)
+        rxn_system.time += nekmc_do_reaction(rxn_system, i_rxn, ε)
         rxn_system.n_iter += 1
     end
 end
@@ -78,7 +78,7 @@ function update_rates(rxn_system)
         rev_rate = rxn_system.rev_rate_consts[i]
         fwd_rate = rxn_system.fwd_rate_consts[i]
         for j in 1 : rxn_system.n_species
-            s = rxn_system.stoich[i, j]
+            s = rxn_system.stoich[j, i]
             if s >= 0.
                 rev_rate *= rxn_system.concs[j] ^ s
             else
@@ -140,7 +140,7 @@ function kmc_do_reaction(rxn_system, i_rxn, ε)
         rate = rxn_system.fwd_rates[i_rxn]
         if rate >= 0
             for j = 1 : rxn_system.n_species
-                rxn_system.concs[j] += rxn_system.stoich[i_rxn, j] * ε
+                rxn_system.concs[j] += rxn_system.stoich[j, i_rxn] * ε
             end
             return ε / rate
         end
@@ -150,7 +150,7 @@ function kmc_do_reaction(rxn_system, i_rxn, ε)
         rate = rxn_system.rev_rates[i_rxn]
         if rate >= 0
             for j = 1 : rxn_system.n_species
-                rxn_system.concs[j] -= rxn_system.stoich[i_rxn, j] * ε
+                rxn_system.concs[j] -= rxn_system.stoich[j, i_rxn] * ε
             end
             return ε / rate
         end
@@ -165,12 +165,12 @@ function nekmc_do_reaction(rxn_system, i_rxn, ε)
     rate = rxn_system.net_rates[i_rxn]
     if rate >= 0
         for j = 1 : rxn_system.n_species
-            rxn_system.concs[j] += rxn_system.stoich[i_rxn, j] * ε
+            rxn_system.concs[j] += rxn_system.stoich[j, i_rxn] * ε
         end
         return ε / rate
     else
         for j = 1 : rxn_system.n_species
-            rxn_system.concs[j] -= rxn_system.stoich[i_rxn, j] * ε
+            rxn_system.concs[j] -= rxn_system.stoich[j, i_rxn] * ε
         end
         return -ε / rate
     end
