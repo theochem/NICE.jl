@@ -2,13 +2,15 @@
 CurrentModule = NICE
 ```
 
-# NICE
+# NICE.jl
 
-Documentation for [NICE](https://github.com/quantumelephant/NICE.jl).
+Documentation for [NICE.jl](nice.qcdevs.org).
 
-```@index
+```@contents
+Pages = ["api.md"]
 ```
 
-```@autodocs
-Modules = [NICE]
+## Index
+
+```@index
 ```

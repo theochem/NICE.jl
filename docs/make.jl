@@ -6,20 +6,21 @@ DocMeta.setdocmeta!(NICE, :DocTestSetup, :(using NICE); recursive=true)
 makedocs(;
     modules=[NICE],
     authors="QC-Devs",
-    repo="https://github.com/quantumelephant/NICE.jl/blob/{commit}{path}#{line}",
+    repo="https://github.com/theochem/NICE.jl/blob/{commit}{path}#{line}",
     sitename="NICE.jl",
     format=Documenter.HTML(;
         prettyurls=get(ENV, "CI", "false") == "true",
-        canonical="https://quantumelephant.github.io/NICE.jl",
+        canonical="https://nice.qcdevs.org/",
         edit_link="main",
         assets=String[],
     ),
     pages=[
         "Home" => "index.md",
+        "API" => "api.md",
     ],
 )
 
 deploydocs(;
-    repo="github.com/quantumelephant/NICE.jl",
+    repo="github.com/theochem/NICE.jl",
     devbranch="main",
 )
