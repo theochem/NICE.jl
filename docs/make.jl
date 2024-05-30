@@ -9,6 +9,7 @@ makedocs(;
     repo="https://github.com/theochem/NICE.jl/blob/{commit}{path}#{line}",
     sitename="NICE.jl",
     format=Documenter.HTML(;
+        repolink="https://github.com/theochem/NICE.jl/",
         prettyurls=get(ENV, "CI", "false") == "true",
         canonical="https://nice.qcdevs.org/",
         edit_link="main",

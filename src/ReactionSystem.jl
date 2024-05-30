@@ -1,7 +1,9 @@
+export ReactionSystem
+
 """
 Definition of the simultaneous equilibria reaction system. This type is the
-input to the solver functions [`simulate`](@ref) and [`solve`](@ref), and is
-updated in-place.
+input to the solver functions [`simulate!`](@ref), [`solve!`](@ref) and
+[`evolutionary_solve!`](@ref), and is updated in-place.
 
 The reaction system consists of
 - ``M`` Reactions involving ``N`` species;
@@ -50,10 +52,10 @@ Instantiate a [`ReactionSystem`](@ref) instance using the forward and reverse
 rate constants for each reaction.
 """
 function ReactionSystem(
-    stoich::AbstractMatrix{Float64},
-    concs::AbstractVector{Float64},
-    rev_rate_consts::AbstractVector{Float64},
-    fwd_rate_consts::AbstractVector{Float64},
+    stoich::Matrix{Float64},
+    concs::Vector{Float64},
+    rev_rate_consts::Vector{Float64},
+    fwd_rate_consts::Vector{Float64},
 )
     n_species = size(stoich, 1)
     n_reaction = size(stoich, 2)
@@ -84,10 +86,10 @@ k_f &= \\phi - k_r
 ```
 """
 function ReactionSystem(
-    stoich::AbstractMatrix{Float64},
-    concs::AbstractVector{Float64},
-    K_eqs::AbstractVector{Float64};
-    φ::Real=1.0,
+    stoich::Matrix{Float64},
+    concs::Vector{Float64},
+    K_eqs::Vector{Float64};
+    φ::Float64=1.0,
 )
     n_species = size(stoich, 1)
     n_reaction = size(stoich, 2)
