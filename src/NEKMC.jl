@@ -1,7 +1,9 @@
 using LinearAlgebra
 
+export simulate!
+
 """
-    simulate(rxn_system;
+    simulate!(rxn_system;
              n_iter=Int(1e+8), chunk_iter=Int(1e+4),
              ε=1.0e-4, ε_scale=1.0, ε_concs=0.0,
              tol_t=Inf, tol_ε=0.0, tol_concs=0.0)
@@ -9,16 +11,16 @@ using LinearAlgebra
 Run a *N*et-*E*vent *K*inetic *M*onte *C*arlo (NEKMC) simulation to find the
 equilibrium concentrations of the reaction system.
 """
-function simulate(
+function simulate!(
     rxn_system::ReactionSystem;
-    n_iter::Integer=Int(1e+8),
-    chunk_iter::Integer=Int(1e+4),
-    ε::Real=1.0e-4,
-    ε_scale::Real=1.0,
-    ε_concs::Real=0.0,
-    tol_t::Real=Inf,
-    tol_ε::Real=0.0,
-    tol_concs::Real=0.0,
+    n_iter::Int=Int(1e+8),
+    chunk_iter::Int=Int(1e+4),
+    ε::Float64=1.0e-4,
+    ε_scale::Float64=1.0,
+    ε_concs::Float64=0.0,
+    tol_t::Float64=Inf,
+    tol_ε::Float64=0.0,
+    tol_concs::Float64=0.0,
 )
     # Allocate probability vector, Δconcs vector, Δt
     pvec = zeros(Float64, rxn_system.n_reaction)
@@ -82,7 +84,7 @@ end
 
 function select_reaction(
     rxn_system::ReactionSystem,
-    pvec::AbstractVector{Float64},
+    pvec::Vector{Float64},
 )
     # Update probability vector
     p = 0.
@@ -103,8 +105,8 @@ end
 
 function do_reaction(
     rxn_system::ReactionSystem,
-    i_rxn::Integer,
-    ε::Real,
+    i_rxn::Int,
+    ε::Float64,
 )
     rate = rxn_system.net_rates[i_rxn]
     if rate >= 0

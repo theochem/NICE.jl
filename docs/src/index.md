@@ -4,7 +4,7 @@ CurrentModule = NICE
 
 # NICE.jl
 
-Documentation for [NICE.jl](nice.qcdevs.org).
+Documentation for NICE.jl.
 
 ```@contents
 Pages = ["api.md"]
