@@ -10,9 +10,10 @@ module NICE
 export ReactionSystem
 export simulate
 export solve
+export hybrid_solve
 
 include("ReactionSystem.jl")
 include("NEKMC.jl")
 include("Exact.jl")
 
-end # module NICE
+end

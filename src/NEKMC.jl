@@ -24,9 +24,9 @@ function simulate(
     pvec = zeros(Float64, rxn_system.n_reaction)
     Δconcs = similar(rxn_system.concs)
     # Run simulation
-    for _ in 1 : chunk_iter : n_iter
+    for _ in 1:chunk_iter:n_iter
         Δtime = 0.0
-        for _ in 1 : chunk_iter
+        for _ in 1:chunk_iter
             # Set Δconcs to concentration at step (n_iter - 1)
             Δconcs .= rxn_system.concs
             # Update rates of reaction
@@ -46,7 +46,7 @@ function simulate(
         # Check for concentration convergence
         if norm_Δconcs < tol_concs
             return :ConcentrationConvergence
-        # Check for decrease in concentration step size
+            # Check for decrease in concentration step size
         elseif norm_Δconcs < ε * ε_concs
             ε *= ε_scale
         end
@@ -62,16 +62,16 @@ end
 function update_rates(
     rxn_system::ReactionSystem,
 )
-    for i in 1 : rxn_system.n_reaction
+    for i in 1:rxn_system.n_reaction
         rev_rate = rxn_system.rev_rate_consts[i]
         fwd_rate = rxn_system.fwd_rate_consts[i]
-        for j in 1 : rxn_system.n_species
+        for j in 1:rxn_system.n_species
             s = rxn_system.stoich[j, i]
             if s >= 0.
-                rev_rate *= rxn_system.concs[j] ^ s
+                rev_rate *= rxn_system.concs[j]^s
             else
                 # fwd_rate *= rxn_system.concs[j] ^ abs(s)
-                fwd_rate *= rxn_system.concs[j] ^ (-s)
+                fwd_rate *= rxn_system.concs[j]^(-s)
             end
         end
         rxn_system.rev_rates[i] = rev_rate
@@ -86,13 +86,13 @@ function select_reaction(
 )
     # Update probability vector
     p = 0.
-    for i in 1 : rxn_system.n_reaction
+    for i in 1:rxn_system.n_reaction
         p += abs(rxn_system.net_rates[i])
         pvec[i] = p
     end
     # Select random reaction
     p *= rand(Float64)
-    for i in 1 : rxn_system.n_reaction
+    for i in 1:rxn_system.n_reaction
         if pvec[i] > p
             return i
         end
@@ -108,12 +108,12 @@ function do_reaction(
 )
     rate = rxn_system.net_rates[i_rxn]
     if rate >= 0
-        for j = 1 : rxn_system.n_species
+        for j = 1:rxn_system.n_species
             rxn_system.concs[j] += rxn_system.stoich[j, i_rxn] * ε
         end
         return ε / rate
     else
-        for j = 1 : rxn_system.n_species
+        for j = 1:rxn_system.n_species
             rxn_system.concs[j] -= rxn_system.stoich[j, i_rxn] * ε
         end
         return -ε / rate
