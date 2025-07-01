@@ -2,120 +2,84 @@ using LinearAlgebra
 
 """
     simulate(rxn_system;
-             n_iter=Int(1e+8), chunk_iter=Int(1e+4),
-             ε=1.0e-4, ε_scale=1.0, ε_concs=0.0,
-             tol_t=Inf, tol_ε=0.0, tol_concs=0.0)
+             n_iter=Int(1e+8), ε=1.0e-4, ε_tol=1.0e-12, ε_mult=0.1,
+             n_check=100, n_avg=100)
 
 Run a *N*et-*E*vent *K*inetic *M*onte *C*arlo (NEKMC) simulation to find the
 equilibrium concentrations of the reaction system.
 """
 function simulate(
-    rxn_system::ReactionSystem;
-    n_iter::Integer=Int(1e+8),
-    chunk_iter::Integer=Int(1e+4),
-    ε::Real=1.0e-4,
-    ε_scale::Real=1.0,
-    ε_concs::Real=0.0,
-    tol_t::Real=Inf,
-    tol_ε::Real=0.0,
-    tol_concs::Real=0.0,
+  rxn_system::ReactionSystem;
+  n_iter::Integer=Int(1e+8),
+  ε::Real=1.0e-3,
+  ε_tol::Real=1.0e-12,
+  ε_mult::Real=0.1,
+  n_check=100,
+  n_avg=100,
 )
-    # Allocate probability vector, Δconcs vector, Δt
-    pvec = zeros(Float64, rxn_system.n_reaction)
-    Δconcs = similar(rxn_system.concs)
-    # Run simulation
-    for _ in 1:chunk_iter:n_iter
-        Δtime = 0.0
-        for _ in 1:chunk_iter
-            # Set Δconcs to concentration at step (n_iter - 1)
-            Δconcs .= rxn_system.concs
-            # Update rates of reaction
-            update_rates(rxn_system)
-            # Select and carry out random reaction
-            i_rxn = select_reaction(rxn_system, pvec)
-            Δtime += do_reaction(rxn_system, i_rxn, ε)
-        end
-        rxn_system.time += Δtime
-        # Check for time convergence
-        if Δtime > tol_t
-            return :TimeConvergence
-        end
-        # Compute actual Δconcs at step (n_iter)
-        Δconcs .-= rxn_system.concs
-        norm_Δconcs = √(Δconcs · Δconcs)
-        # Check for concentration convergence
-        if norm_Δconcs < tol_concs
-            return :ConcentrationConvergence
-            # Check for decrease in concentration step size
-        elseif norm_Δconcs < ε * ε_concs
-            ε *= ε_scale
-        end
-        # Check for concentration step size convergence
-        if ε < tol_ε
-            return :StepSizeConvergence
-        end
-        rxn_system.n_iter += 1
-    end
-    :IterationLimit
-end
+  # Working arrays
+  rev_stoich = clamp.(+rxn_system.stoich, 0, Inf)
+  fwd_stoich = clamp.(-rxn_system.stoich, 0, Inf)
+  concs = zeros(Float64, rxn_system.n_species)
+  pvec = zeros(Float64, rxn_system.n_reaction)
 
-function update_rates(
-    rxn_system::ReactionSystem,
-)
-    for i in 1:rxn_system.n_reaction
-        rev_rate = rxn_system.rev_rate_consts[i]
-        fwd_rate = rxn_system.fwd_rate_consts[i]
-        for j in 1:rxn_system.n_species
-            s = rxn_system.stoich[j, i]
-            if s >= 0.
-                rev_rate *= rxn_system.concs[j]^s
-            else
-                # fwd_rate *= rxn_system.concs[j] ^ abs(s)
-                fwd_rate *= rxn_system.concs[j]^(-s)
-            end
-        end
-        rxn_system.rev_rates[i] = rev_rate
-        rxn_system.fwd_rates[i] = fwd_rate
-        rxn_system.net_rates[i] = fwd_rate - rev_rate
-    end
-end
+  # Make vector of sum of abs(net_rates) for our moving average
+  tot_rates = fill(sum(abs.(rxn_system.net_rates)), n_avg)
 
-function select_reaction(
-    rxn_system::ReactionSystem,
-    pvec::AbstractVector{Float64},
-)
-    # Update probability vector
-    p = 0.
-    for i in 1:rxn_system.n_reaction
-        p += abs(rxn_system.net_rates[i])
-        pvec[i] = p
-    end
-    # Select random reaction
-    p *= rand(Float64)
-    for i in 1:rxn_system.n_reaction
-        if pvec[i] > p
-            return i
-        end
-    end
-    # sentinel return value
-    rxn_system.n_reaction
-end
+  # Set the previous total rate
+  tot_rate_prev = tot_rates[1]
 
-function do_reaction(
-    rxn_system::ReactionSystem,
-    i_rxn::Integer,
-    ε::Real,
-)
-    rate = rxn_system.net_rates[i_rxn]
-    if rate >= 0
-        for j = 1:rxn_system.n_species
-            rxn_system.concs[j] += rxn_system.stoich[j, i_rxn] * ε
-        end
-        return ε / rate
-    else
-        for j = 1:rxn_system.n_species
-            rxn_system.concs[j] -= rxn_system.stoich[j, i_rxn] * ε
-        end
-        return -ε / rate
+  # Store original ε
+  ε0 = ε
+
+  # Begin iterating
+  rxn_system.n_iter = 0
+  # Stop if number of iterations exceeded or ε converged
+  while (rxn_system.n_iter != n_iter) && (ε > ε_tol)
+
+    # Compute cumulative sum of abs(net_rates)
+    cumsum!(pvec, abs.(rxn_system.net_rates))
+
+    # Update total rate moving average
+    circshift!(tot_rates, 1)
+    tot_rates[1] = pvec[end]
+
+    # Check every n_check iterations for a significant (in|de)crease in total rate moving average
+    if (n_iter % n_check == 0)
+      # Compute total rate from moving average
+      tot_rate_curr = sum(tot_rates) / n_avg
+      if (tot_rate_curr < tot_rate_prev * ε_mult)
+        # Set new previous total rate
+        tot_rate_prev = tot_rate_curr
+
+        # Scale ε
+        ε *= ε_mult
+      elseif (tot_rate_curr * ε_mult > tot_rate_prev)
+        # Set new previous total rate
+        tot_rate_prev = tot_rate_curr
+
+        # Scale ε
+        ε /= ε_mult
+      end
     end
+
+    # Select a reaction randomly
+    i_rxn = searchsortedfirst(pvec, pvec[end] * rand(Float64))
+
+    # Do the reaction if it is possible
+    concs .= rxn_system.concs .+ (ε * sign(rxn_system.net_rates[i_rxn])) .* rxn_system.stoich[:, i_rxn]
+    any(concs .< 0) && continue
+    rxn_system.concs .= concs
+
+    # Update the time step
+    rxn_system.time -= ε * log(rand(Float64)) / (ε0 * abs(pvec[end]))
+
+    # Update rates of reaction
+    rxn_system.rev_rates .= rxn_system.rev_rate_consts .* vec(prod(rxn_system.concs .^ rev_stoich; dims=1))
+    rxn_system.fwd_rates .= rxn_system.fwd_rate_consts .* vec(prod(rxn_system.concs .^ fwd_stoich; dims=1))
+    rxn_system.net_rates .= rxn_system.fwd_rates .- rxn_system.rev_rates
+
+    # Go to next iteration
+    rxn_system.n_iter += 1
+  end
 end
