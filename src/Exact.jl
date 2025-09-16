@@ -201,15 +201,15 @@ function solve(
 end
 
 """
-    hybrid_solve(rxn_system, K_eqs; n_iter=Int(1e+8), chunk_iter=Int(1e+4), ε=1.0e-4, ε_scale=1.0, ε_concs=0.0, tol_ε=0.0, maxiters=1000, abstol=1.0e-9, reltol=0.0)
+    kmc_hybrid_solve(rxn_system, K_eqs; n_iter=Int(1e+8), chunk_iter=Int(1e+4), ε=1.0e-4, ε_scale=1.0, ε_concs=0.0, tol_ε=0.0, maxiters=1000, abstol=1.0e-9, reltol=0.0)
 
 Combines stochastic simulation and deterministic solving to find equilibrium
-concentrations. First, it runs a Net-Event Kinetic Monte Carlo simulation via
-`simulate` to approach equilibrium, then refines the result using the
+concentrations. First, it runs a Kinetic Monte Carlo simulation via
+`kmc_simulate` to approach equilibrium, then refines the result using the
 deterministic `solve` method with provided ``K_\\text{eq}`` values. The function
 updates `rxn_system.concs` and returns the final nonlinear solution object.
 """
-function hybrid_solve(
+function kmc_hybrid_solve(
   rxn_system::ReactionSystem,
   K_eqs::AbstractVector{Float64};
   maxiters::Integer=1000,
@@ -222,6 +222,32 @@ function hybrid_solve(
   abstol::Real=1.0e-9,
   reltol::Real=0.0,
 )
-  simulate(rxn_system; n_iter=n_iter, ε=ε, ε_tol=ε_tol, ε_mult=ε_mult, n_check=n_check, n_avg=n_avg)
+  kmc_simulate(rxn_system; n_iter=n_iter, ε=ε, ε_tol=ε_tol, ε_mult=ε_mult, n_check=n_check, n_avg=n_avg)
+  solve(rxn_system, K_eqs; maxiters=maxiters, abstol=abstol, reltol=reltol)
+end
+
+"""
+    nekmc_hybrid_solve(rxn_system, K_eqs; n_iter=Int(1e+8), chunk_iter=Int(1e+4), ε=1.0e-4, ε_scale=1.0, ε_concs=0.0, tol_ε=0.0, maxiters=1000, abstol=1.0e-9, reltol=0.0)
+
+Combines stochastic simulation and deterministic solving to find equilibrium
+concentrations. First, it runs a Net-Event Kinetic Monte Carlo simulation via
+`nekmc_simulate` to approach equilibrium, then refines the result using the
+deterministic `solve` method with provided ``K_\\text{eq}`` values. The function
+updates `rxn_system.concs` and returns the final nonlinear solution object.
+"""
+function nekmc_hybrid_solve(
+  rxn_system::ReactionSystem,
+  K_eqs::AbstractVector{Float64};
+  maxiters::Integer=1000,
+  n_iter::Integer=Int(1e+8),
+  ε::Real=1.0e-3,
+  ε_tol::Real=1.0e-12,
+  ε_mult::Real=0.1,
+  n_check=100,
+  n_avg=100,
+  abstol::Real=1.0e-9,
+  reltol::Real=0.0,
+)
+  nekmc_simulate(rxn_system; n_iter=n_iter, ε=ε, ε_tol=ε_tol, ε_mult=ε_mult, n_check=n_check, n_avg=n_avg)
   solve(rxn_system, K_eqs; maxiters=maxiters, abstol=abstol, reltol=reltol)
 end
