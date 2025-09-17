@@ -18,22 +18,22 @@ Arguments:
 - xi::AbstractVector{T}: The reaction progress vector ξ, length R, where T is a subtype of Real (e.g., Float64 or Dual).
 """
 function objective_function!(f::AbstractVector, rxn_system::ReactionSystem, K_eqs::AbstractVector{Float64}, xi::AbstractVector{T}) where {T<:Real}
-    activities = rxn_system.concs_init .+ rxn_system.stoich * xi
+  activities = rxn_system.concs_init .+ rxn_system.stoich * xi
 
-    for r in 1:rxn_system.n_reaction
-        term1 = K_eqs[r]
-        term2 = one(T)
+  for r in 1:rxn_system.n_reaction
+    term1 = K_eqs[r]
+    term2 = one(T)
 
-        for i in 1:rxn_system.n_species
-            nu_ir = rxn_system.stoich[i, r]
-            if nu_ir < 0
-                term1 *= activities[i]^(-nu_ir)
-            elseif nu_ir > 0
-                term2 *= activities[i]^(nu_ir)
-            end
-        end
-        f[r] = term1 - term2
+    for i in 1:rxn_system.n_species
+      nu_ir = rxn_system.stoich[i, r]
+      if nu_ir < 0
+        term1 *= activities[i]^(-nu_ir)
+      elseif nu_ir > 0
+        term2 *= activities[i]^(nu_ir)
+      end
     end
+    f[r] = term1 - term2
+  end
 end
 """
     jacobian_function!(J, rxn_system, K_eqs, xi)
@@ -56,48 +56,48 @@ Arguments:
 
 """
 function jacobian_function!(J::Matrix{Float64}, rxn_system::ReactionSystem, K_eqs::AbstractVector{Float64}, xi::Vector{Float64})
-    R = rxn_system.n_reaction
-    N = rxn_system.n_species
+  R = rxn_system.n_reaction
+  N = rxn_system.n_species
 
-    activities = rxn_system.concs_init .+ rxn_system.stoich * xi
+  activities = rxn_system.concs_init .+ rxn_system.stoich * xi
 
-    if any(x -> x <= 0, activities)
-        J .= Inf
-        return nothing
+  if any(x -> x <= 0, activities)
+    J .= Inf
+    return nothing
+  end
+
+  P_reactants = ones(R)
+  P_products = ones(R)
+  for r in 1:R
+    for i in 1:N
+      nu_ir = rxn_system.stoich[i, r]
+      if nu_ir < 0
+        P_reactants[r] *= activities[i]^(-nu_ir)
+      elseif nu_ir > 0
+        P_products[r] *= activities[i]^(nu_ir)
+      end
     end
+  end
 
-    P_reactants = ones(R)
-    P_products = ones(R)
-    for r in 1:R
-        for i in 1:N
-            nu_ir = rxn_system.stoich[i, r]
-            if nu_ir < 0
-                P_reactants[r] *= activities[i]^(-nu_ir)
-            elseif nu_ir > 0
-                P_products[r] *= activities[i]^(nu_ir)
-            end
-        end
+  for r in 1:R, s in 1:R
+    sum_deriv1 = 0.0
+    for i in 1:N
+      if rxn_system.stoich[i, r] < 0
+        sum_deriv1 += (-rxn_system.stoich[i, r] / activities[i]) * rxn_system.stoich[i, s]
+      end
     end
+    term1_deriv = K_eqs[r] * P_reactants[r] * sum_deriv1
 
-    for r in 1:R, s in 1:R
-        sum_deriv1 = 0.0
-        for i in 1:N
-            if rxn_system.stoich[i, r] < 0
-                sum_deriv1 += (-rxn_system.stoich[i, r] / activities[i]) * rxn_system.stoich[i, s]
-            end
-        end
-        term1_deriv = K_eqs[r] * P_reactants[r] * sum_deriv1
-
-        sum_deriv2 = 0.0
-        for i in 1:N
-            if rxn_system.stoich[i, r] > 0
-                sum_deriv2 += (rxn_system.stoich[i, r] / activities[i]) * rxn_system.stoich[i, s]
-            end
-        end
-        term2_deriv = P_products[r] * sum_deriv2
-
-        J[r, s] = term1_deriv - term2_deriv
+    sum_deriv2 = 0.0
+    for i in 1:N
+      if rxn_system.stoich[i, r] > 0
+        sum_deriv2 += (rxn_system.stoich[i, r] / activities[i]) * rxn_system.stoich[i, s]
+      end
     end
+    term2_deriv = P_products[r] * sum_deriv2
+
+    J[r, s] = term1_deriv - term2_deriv
+  end
 end
 
 
@@ -129,27 +129,27 @@ is updated with the final equilibrium concentrations.
   and other diagnostic information.
 """
 function solve(
-    rxn_system::ReactionSystem,
-    K_eqs::AbstractVector{Float64};
-    maxiters::Integer=1000,
-    abstol::Real=1.0e-9,
-    reltol::Real=0.0,
+  rxn_system::ReactionSystem,
+  K_eqs::AbstractVector{Float64};
+  maxiters::Integer=1000,
+  abstol::Real=1.0e-9,
+  reltol::Real=0.0,
 )
-    # Define wrappers that unpack the parameter tuple p = (rxn_system, K_eqs)
-    f_obj = (du, u, p) -> objective_function!(du, p[1], p[2], u)
-    f_jac = (J, u, p) -> jacobian_function!(J, p[1], p[2], u)
+  # Define wrappers that unpack the parameter tuple p = (rxn_system, K_eqs)
+  f_obj = (du, u, p) -> objective_function!(du, p[1], p[2], u)
+  f_jac = (J, u, p) -> jacobian_function!(J, p[1], p[2], u)
 
-    nls_func = NonlinearFunction(f_obj; jac=f_jac)
-    u0 = zeros(Float64, rxn_system.n_reaction)
-    params = (rxn_system, K_eqs)
-    problem = NonlinearProblem(nls_func, u0, params)
-    solution = NonlinearSolve.solve(problem, TrustRegion(); maxiters=maxiters, abstol=abstol, reltol=reltol)
+  nls_func = NonlinearFunction(f_obj; jac=f_jac)
+  u0 = zeros(Float64, rxn_system.n_reaction)
+  params = (rxn_system, K_eqs)
+  problem = NonlinearProblem(nls_func, u0, params)
+  solution = NonlinearSolve.solve(problem, TrustRegion(); maxiters=maxiters, abstol=abstol, reltol=reltol)
 
-    if SciMLBase.successful_retcode(solution)
-        rxn_system.concs .= rxn_system.concs_init .+ rxn_system.stoich * solution.u
-    end
+  if SciMLBase.successful_retcode(solution)
+    rxn_system.concs .= rxn_system.concs_init .+ rxn_system.stoich * solution.u
+  end
 
-    return solution
+  return solution
 end
 
 """
@@ -177,51 +177,77 @@ are derived as ``K_\\text{eq} = (k_f - 2\\phi)/(k_f - \\phi)``; if `:reverse`, a
 upon successful convergence and returns a solution object.
 """
 function solve(
-    rxn_system::ReactionSystem;
-    φ::Real=1.0,
-    rate_consts::Symbol=:forward,
-    maxiters::Integer=1000,
-    abstol::Real=1.0e-9,
-    reltol::Real=0.0,
+  rxn_system::ReactionSystem;
+  φ::Real=1.0,
+  rate_consts::Symbol=:forward,
+  maxiters::Integer=1000,
+  abstol::Real=1.0e-9,
+  reltol::Real=0.0,
 )
-    if rate_consts === :forward
-        # Evaluate K_eqs from forward rate constants and φ_fwd
-        K_eqs = (
-            (rxn_system.fwd_rate_consts .- 2 * φ) ./
-            (rxn_system.fwd_rate_consts - φ)
-        )
-    elseif rate_consts === :reverse
-        # Evaluate K_eqs from reverse rate constants and φ_rev
-        K_eqs = (rxn_system.rev_rate_consts .+ φ) ./ rxn_system.rev_rate_consts
-    else
-        throw(ArgumentError("invalid rate_consts value $rate_consts \
-                             (must be :forward or :reverse)"))
-    end
-    solve(rxn_system, K_eqs; maxiters=maxiters, abstol=abstol, reltol=reltol)
+  if rate_consts === :forward
+    # Evaluate K_eqs from forward rate constants and φ_fwd
+    K_eqs = (
+      (rxn_system.fwd_rate_consts .- 2 * φ) ./
+      (rxn_system.fwd_rate_consts - φ)
+    )
+  elseif rate_consts === :reverse
+    # Evaluate K_eqs from reverse rate constants and φ_rev
+    K_eqs = (rxn_system.rev_rate_consts .+ φ) ./ rxn_system.rev_rate_consts
+  else
+    throw(ArgumentError("invalid rate_consts value $rate_consts \
+                         (must be :forward or :reverse)"))
+  end
+  solve(rxn_system, K_eqs; maxiters=maxiters, abstol=abstol, reltol=reltol)
 end
 
 """
-    hybrid_solve(rxn_system, K_eqs; n_iter=Int(1e+8), chunk_iter=Int(1e+4), ε=1.0e-4, ε_scale=1.0, ε_concs=0.0, tol_ε=0.0, maxiters=1000, abstol=1.0e-9, reltol=0.0)
+    kmc_hybrid_solve(rxn_system, K_eqs; n_iter=Int(1e+8), chunk_iter=Int(1e+4), ε=1.0e-4, ε_scale=1.0, ε_concs=0.0, tol_ε=0.0, maxiters=1000, abstol=1.0e-9, reltol=0.0)
 
 Combines stochastic simulation and deterministic solving to find equilibrium
-concentrations. First, it runs a Net-Event Kinetic Monte Carlo simulation via
-`simulate` to approach equilibrium, then refines the result using the
+concentrations. First, it runs a Kinetic Monte Carlo simulation via
+`kmc_simulate` to approach equilibrium, then refines the result using the
 deterministic `solve` method with provided ``K_\\text{eq}`` values. The function
 updates `rxn_system.concs` and returns the final nonlinear solution object.
 """
-function hybrid_solve(
-    rxn_system::ReactionSystem,
-    K_eqs::AbstractVector{Float64};
-    n_iter::Integer=Int(1e+8),
-    chunk_iter::Integer=Int(1e+4),
-    ε::Real=1.0e-4,
-    ε_scale::Real=1.0,
-    ε_concs::Real=0.0,
-    tol_ε::Real=0.0,
-    maxiters::Integer=1000,
-    abstol::Real=1.0e-9,
-    reltol::Real=0.0,
+function kmc_hybrid_solve(
+  rxn_system::ReactionSystem,
+  K_eqs::AbstractVector{Float64};
+  maxiters::Integer=1000,
+  n_iter::Integer=Int(1e+8),
+  ε::Real=1.0e-3,
+  ε_tol::Real=1.0e-12,
+  ε_mult::Real=0.1,
+  n_check=100,
+  n_avg=100,
+  abstol::Real=1.0e-9,
+  reltol::Real=0.0,
 )
-    simulate(rxn_system; n_iter=n_iter, chunk_iter=chunk_iter, ε=ε, ε_scale=ε_scale, ε_concs=ε_concs, tol_ε=tol_ε)
-    solve(rxn_system, K_eqs; maxiters=maxiters, abstol=abstol, reltol=reltol)
+  kmc_simulate(rxn_system; n_iter=n_iter, ε=ε, ε_tol=ε_tol, ε_mult=ε_mult, n_check=n_check, n_avg=n_avg)
+  solve(rxn_system, K_eqs; maxiters=maxiters, abstol=abstol, reltol=reltol)
+end
+
+"""
+    nekmc_hybrid_solve(rxn_system, K_eqs; n_iter=Int(1e+8), chunk_iter=Int(1e+4), ε=1.0e-4, ε_scale=1.0, ε_concs=0.0, tol_ε=0.0, maxiters=1000, abstol=1.0e-9, reltol=0.0)
+
+Combines stochastic simulation and deterministic solving to find equilibrium
+concentrations. First, it runs a Net-Event Kinetic Monte Carlo simulation via
+`nekmc_simulate` to approach equilibrium, then refines the result using the
+deterministic `solve` method with provided ``K_\\text{eq}`` values. The function
+updates `rxn_system.concs` and returns the final nonlinear solution object.
+"""
+function nekmc_hybrid_solve(
+  rxn_system::ReactionSystem,
+  K_eqs::AbstractVector{Float64};
+  maxiters::Integer=1000,
+  n_iter::Integer=Int(1e+8),
+  ε::Real=1.0e-3,
+  ε_tol::Real=1.0e-12,
+  ε_mult::Real=0.1,
+  n_check=100,
+  n_avg=100,
+  abstol::Real=1.0e-9,
+  reltol::Real=0.0,
+)
+  nekmc_simulate(rxn_system; n_iter=n_iter, ε=ε, ε_tol=ε_tol, ε_mult=ε_mult, n_check=n_check, n_avg=n_avg)
+  solve(rxn_system, K_eqs; maxiters=maxiters, abstol=abstol, reltol=reltol)
 end
