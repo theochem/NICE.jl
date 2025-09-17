@@ -49,7 +49,7 @@ function kmc_simulate(
     tot_rates[1] = pvec[end]
 
     # Check every n_check iterations for a significant (in|de)crease in total rate moving average
-    if (n_iter % n_check == 0)
+    if (rxn_system.n_iter % n_check == 0)
       # Compute total rate from moving average
       tot_rate_curr = sum(tot_rates) / n_avg
       if (tot_rate_curr < tot_rate_prev * ε_mult)
@@ -143,7 +143,7 @@ function nekmc_simulate(
     tot_rates[1] = pvec[end]
 
     # Check every n_check iterations for a significant (in|de)crease in total rate moving average
-    if (n_iter % n_check == 0)
+    if (rxn_system.n_iter % n_check == 0)
       # Compute total rate from moving average
       tot_rate_curr = sum(tot_rates) / n_avg
       if (tot_rate_curr < tot_rate_prev * ε_mult)
